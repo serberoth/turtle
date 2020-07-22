@@ -1,0 +1,59 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+</head>
+<body>
+    <canvas id="turtle-canvas" width="640" height="480" style="border: 1px solid black;"></canvas>
+    <script>
+        const canvas = document.getElementById('turtle-canvas');
+        const context = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        let x = width / 2;
+        let y = height / 2;
+        context.moveTo(x, y);
+        let a = -90;
+
+        function forward(n) {
+            let rads = (a * Math.PI) / 180.0;
+            x += Math.cos(rads) * n;
+            y += Math.sin(rads) * n;
+            context.lineTo(x, y);
+            context.stroke();
+        }
+
+        function back(n) {
+            a -= 180;
+            forward(n);
+            a += 180;
+        }
+
+        function turn(n) {
+            a += n;
+        }
+        function left(n) { turn(-n); }
+        function right(n) { turn(n); }
+
+        function set_random_position() {
+            x = Math.random() * width;
+            y = Math.random() * height;
+            context.moveTo(x, y);
+        }
+
+        function tree(depth, length, scale, angle) {
+            if (depth == 0) { return; }
+            forward(length);
+            right(angle);
+            tree(depth - 1, length * scale, scale, angle);
+            left(2 * angle)
+            tree(depth - 1, length * scale, scale, angle);
+            right(angle);
+            back(length);
+        }
+
+        tree(10, 80, 0.7, 30);
+    </script>
+</body>
+</html>
