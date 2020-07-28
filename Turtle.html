@@ -42,18 +42,28 @@
             context.moveTo(x, y);
         }
 
-        function tree(depth, length, scale, angle) {
-            if (depth == 0) { return; }
-            forward(length);
-            right(angle);
-            tree(depth - 1, length * scale, scale, angle);
-            left(2 * angle)
-            tree(depth - 1, length * scale, scale, angle);
-            right(angle);
-            back(length);
+        function set_pen_colour(colour) {
+            context.fillStyle = colour;
+            context.strokeStyle = colour;
         }
 
-        tree(10, 80, 0.7, 30);
+        function set_pen_size(cap, width) {
+            context.lineCap = cap;
+            context.lineWidth = width;
+        }
+
+        //function tree(depth, length, scale, angle) {
+        //    if (depth == 0) { return; }
+        //    forward(length);
+        //    right(angle);
+        //    tree(depth - 1, length * scale, scale, angle);
+        //    left(2 * angle)
+        //    tree(depth - 1, length * scale, scale, angle);
+        //    right(angle);
+        //    back(length);
+        //}
+
+        //tree(10, 80, 0.7, 30);
     </script>
 </body>
 </html>

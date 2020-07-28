@@ -13,6 +13,79 @@ module Ast =
         | Proc of Name * Param list * Command list
 
 #if INTERACTIVE
+#r "packages/FParsec.1.1.1/lib/net45/FParsecCS.dll"
+#r "packages/FParsec.1.1.1/lib/net45/FParsec.dll"
+#endif
+
+module Parser =
+    open Ast
+    open FParsec
+
+    let procs = ref []
+
+    let pidentifier =
+        let isIdentifierFirstChar c = isLetter c || c = '-'
+        let isIdentifierChar c = isLetter c || isDigit c || c = '-'
+        many1Satisfy2L isIdentifierFirstChar isIdentifierChar "identifier"
+
+    let pparam = pstring ":" >>. pidentifier
+    let pnumber = pfloat |>> fun n -> Number(int n)
+
+    let parg = pnumber <|> (pparam |>> fun a -> Arg(a))
+
+    let pforward = 
+        (pstring "fd" <|> pstring "forward") >>. spaces1 >>. parg
+        |>> fun arg -> Forward(arg)
+    let pleft =
+        (pstring "lt" <|> pstring "left") >>. spaces1 >>. parg
+        |>> fun arg -> Left(arg)
+    let pright =
+        (pstring "rt" <|> pstring "right") >>. spaces1 >>. parg
+        |>> fun arg -> Right(arg)
+    let prandom =
+        pstring "set-random-position"
+        |>> fun _ -> SetRandomPosition
+
+    let prepeat, prepeatimpl = createParserForwardedToRef()
+    let pcall, pcallimpl = createParserForwardedToRef()
+
+    let pcommand = pforward <|> pleft <|> pright <|> prandom <|> prepeat <|> pcall
+
+    let updateCalls () =
+        pcallimpl :=
+            choice [
+                for name, ps in !procs ->
+                    pstring name >>. spaces >>. (many parg .>> spaces)
+                    |>> fun args -> Call(name, args)
+
+            ]
+    updateCalls()
+
+    let block = between (pstring "[" .>> spaces) (pstring "]") (sepEndBy pcommand spaces1)
+
+    prepeatimpl :=
+        pstring "repeat" >>. spaces1 >>. parg .>> spaces .>>. block
+        |>> fun (arg, commands) -> Repeat(arg, commands)
+
+    let pparams = many (pparam .>> spaces)
+    let pheader = pstring "to" >>. spaces >>. pidentifier .>> spaces1 .>>. pparams
+    let pbody = many (pcommand .>> spaces1)
+    let pfooter = pstring "end"
+
+    let pproc =
+        pheader .>>. pbody .>> pfooter
+        |>> fun ((name, ps), body) ->
+            procs := (name, ps)::!procs; updateCalls()
+            Proc(name, ps, body)
+
+    let parser = spaces >>. (sepEndBy (pcommand <|> pproc) spaces1)
+    
+    let parse code =
+        match run parser code with
+        | Success(result, _, _) -> result
+        | Failure(msg, _, _) -> failwith msg
+
+#if INTERACTIVE
 #r "System.Drawing.dll"
 #r "System.Windows.Forms.dll"
 #endif
@@ -42,7 +115,7 @@ module Interpreter =
 
         let rec perform env turtle = function
             | Forward arg ->
-                let r = float turtle.A * Math.PI / 180.0
+                let r = ((float turtle.A) * Math.PI) / 180.0
                 let n = getValue env arg
                 let dx, dy = float n * cos r, float n * sin r
                 let x, y = turtle.X, turtle.Y
@@ -57,109 +130,41 @@ module Interpreter =
                 let n = getValue env arg
                 let rec repeat turtle = function
                     | 0 -> turtle
-                    | n -> repeat (performAll turtle commands) (n-1)
+                    | n -> repeat (performAll env turtle commands) (n-1)
                 repeat turtle n
-            | Proc(name, ps, command) -> procs := Map.add name (ps, commands)
+            | Proc(name, ps, commands) -> procs := Map.add name (ps, commands) !procs; turtle
             | Call(name, args) ->
-                let ps, commands = (|procs).[name]
-                if ps.Length <> args.Length then raise (ArgumentException)
+                let ps, commands = (!procs).[name]
+                if ps.Length <> args.Length then raise (ArgumentException "")
                 let xs = List.zip ps args
-                let env = xs |> List.fold (fun e (name, value) -> Map.add name value)
+                let env = xs |> List.fold (fun e (name, value) -> Map.add name value env) env
                 commands |> performAll env turtle
-        and performAll env turtle commands = commands |> List.fold (perform env turtle)
+        and performAll env turtle commands = commands |> List.fold (fun (t) -> perform env t) turtle
         and getValue env = function
             | Number n -> n
             | Arg name -> getValue env (Map.tryFind name env).Value
         performAll Map.empty turtle commands |> ignore
         form.ShowDialog() |> ignore
 
-#if INTERACTIVE
-#r "FParsecCS.dll"
-#r "FParsec.dll"
-#endif
 
-module Parser =
-    open Ast
-    open FParsec
-
-    let procs = ref []
-
-    let pidentifier =
-        let isIdentifierFirstChar c = isLetter c || c = '-'
-        let isIdentifierChar c = isLetter c || isDigit c || c = '-'
-        many1Satisfy2L isIdentifierFirstChar isIdentifierChar "identifier"
-
-    let pparam = pstring ":" >>. pidentifier
-    let pnumber = pfloat |>> fun n -> Number(int n)
-
-    let parg = pnumber <|> (pparam |>> fun a -> Arg(a))
-
-    let pforward = 
-        (pstring "fd" <|> pstring "forward") >>. spaces1 >>. parg
-        |>> fun x -> Forward(arg)
-    let pleft =
-        (pstring "lt" <|> pstring "left") >>. spaces1 >>. parg
-        |>> fun x -> Left(arg)
-    let pright =
-        (pstring "rt" <|> pstring "right") >>. spaces1 >>. parg
-        |>> fun x -> Right(arg)
-    let prandom =
-        pstring "set-random-position"
-        |>> fun _ -> SetRandomPosition()
-
-    let prepeat, prepateimpl = createParserForwardedToRef()
-    let pcall, pcallimpl = createParserForwardedToRef()
-
-    let pcommand = pforward <|> pleft <|> pright <|> prepeat <|> pcall
-
-    let updateCalls () =
-        pcallimpl :=
-            choice [
-                for name, ps in !procs ->
-                    pstring name >>. spaces >>. (many parg .>> spaces)
-                    |>> fun args -> Call(name, args)
-
-            ]
-    updateCalls()
-
-    let block = between (pstring "[" .>> spaces) (pstring "]") (sepEndBy pcommand spaces1)
-
-    prepeatimpl :=
-        pstring "repeat" >>. spaces1 >>. parg .>> spaces .>>. block
-        |>> fun (arg, commands) -> Repeat(arg, commands)
-
-    let pparam = many (pparam .>> spaces)
-    let pheader = pstring "to" >>. spaces >>. pidentifier .>> spaces1 .>>. pparams
-    let pbody = many (pcommand .>> spaces1)
-    let pfooter = pstring "end"
-
-    let pproc = pheader .>>. pbody .>> pfooter
-        |>> fun ((name, ps) body) ->
-            procs := (name, ps)::!procs; updateCalls()
-            Proc(name, ps, body)
-
-    let parser = spaces >>. (spedEndBy (pcommand <|> proc) spaces1)
-    
-    let parse code =
-        match run parser code with
-        | Success(result, _, _) -> result
-        | Failure(msg, _, _) -> failwith msg
 
 let code = "
-    to square
-        repeat 4 [ forward 50 right 90 ]
-    end
+to square
+    repeat 4 [ forward 50 right 90 ]
+end
 
-    to flower
-        repeat 36 [ right 10 square ]
-    end
+to flower
+    repeat 36 [ right 10 square ]
+end
 
-    to garden :count
-        repeat :count [ set-random-position flower ]
-    end
+to garden :count
+    repeat :count [ set-random-position flower ]
+end
 
-    garden 25
-        "
+garden 25
+"
+
+
 
 let program = Parser.parse code
 Interpreter.execute program

@@ -1,5 +1,6 @@
-﻿#r "FParsecCS.dll"
-#r "FParsec.dll"
+﻿#r "packages/FParsec.1.1.1/lib/net45/FParsecCS.dll"
+#r "packages/FParsec.1.1.1/lib/net45/FParsec.dll"
+
 #load "Ast.fsx"
 #load "Interpreter.fsx"
 
@@ -32,12 +33,12 @@ module Parser =
         |>> fun x -> Forward(int x)
     let pleft =
         (pstring "lt" <|> pstring "left") >>. spaces1 >>. pfloat
-        |>> fun x -> Left(int x)
+        |>> fun x -> Turn(int -x)
     let pright =
         (pstring "rt" <|> pstring "right") >>. spaces1 >>. pfloat
-        |>> fun x -> Right(int x)
+        |>> fun x -> Turn(int x)
 
-    let prepeat, prepateimpl = createParserForwardedToRef()
+    let prepeat, prepeatimpl = createParserForwardedToRef()
 
     let pcommand = pforward <|> pleft <|> pright <|> prepeat
 
